@@ -335,14 +335,30 @@ OPENAI_API_KEY="sk-xxxxxx"
 OPENAI_API_BASE="https://<HOST>:<PORT>/v1"
 ```
 
+### 工作流程
+
+> **一句话总结：OpenAI 格式进，多种模型服务商出。**
+>
+> 用户侧始终使用标准的 OpenAI API 格式发起请求，One API 在内部完成鉴权、额度扣减、渠道选择，并将请求转发给实际的模型服务商（可以是 OpenAI，也可以是 Claude、百度、阿里、讯飞等任意已支持的服务商）。对于原生支持 OpenAI API 格式的下游渠道（如 OpenAI、Azure），请求会直接透传；对于使用其他 API 格式的下游渠道，One API 会在内部完成请求体和响应体的格式转换，用户无需感知。
+
 ```mermaid
-graph LR
-    A(用户)
-    A --->|使用 One API 分发的 key 进行请求| B(One API)
-    B -->|中继请求| C(OpenAI)
-    B -->|中继请求| D(Azure)
-    B -->|中继请求| E(其他 OpenAI API 格式下游渠道)
-    B -->|中继并修改请求体和返回体| F(非 OpenAI API 格式下游渠道)
+graph TD
+    U(用户 / 客户端\n使用 OpenAI 格式请求) -->|标准 OpenAI API 格式\nAuthorization: Bearer &lt;One API 令牌&gt;| OA
+
+    subgraph OA[One API]
+        direction TB
+        Auth[1. 令牌鉴权 & 额度校验]
+        Auth --> Route[2. 渠道选择\n负载均衡 / 指定渠道]
+        Route --> Conv[3. 请求格式转换\n仅非 OpenAI 格式渠道]
+        Conv --> Resp[4. 响应格式回转\n& 额度扣减]
+    end
+
+    OA -->|直接透传| C(OpenAI)
+    OA -->|直接透传| D(Azure OpenAI)
+    OA -->|直接透传| E(其他兼容 OpenAI 格式的渠道)
+    OA -->|自动转换格式| F(Anthropic Claude)
+    OA -->|自动转换格式| G(Google Gemini)
+    OA -->|自动转换格式| H(百度 / 阿里 / 讯飞\n智谱 / 腾讯 等)
 ```
 
 可以通过在令牌后面添加渠道 ID 的方式指定使用哪一个渠道处理本次请求，例如：`Authorization: Bearer ONE_API_KEY-CHANNEL_ID`。
