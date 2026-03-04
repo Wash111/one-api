@@ -221,13 +221,30 @@ OpenAI API が使用されている場所では、API Base に One API のデプ
 
 具体的な API Base のフォーマットは、使用しているクライアントに依存することに注意してください。
 
+### 処理フロー
+
+> **一言で言えば：OpenAI フォーマットで入力、さまざまなモデルプロバイダーへ出力。**
+>
+> クライアントは常に標準の OpenAI API フォーマットでリクエストを送信します。One API は内部で認証、クォータ控除、チャンネル選択を処理し、リクエストを実際のモデルプロバイダー（OpenAI だけでなく、Claude、百度、阿里云、iFlytek など任意のサポート済みプロバイダー）に転送します。OpenAI API フォーマットをネイティブに使用するチャンネル（OpenAI、Azure など）へのリクエストはそのまま転送されます。異なる API フォーマットを使用するチャンネルの場合、One API がリクエストとレスポンスのボディを透過的に変換するため、クライアント側での対応は不要です。
+
 ```mermaid
-graph LR
-    A(ユーザ)
-    A --->|リクエスト| B(One API)
-    B -->|中継リクエスト| C(OpenAI)
-    B -->|中継リクエスト| D(Azure)
-    B -->|中継リクエスト| E(その他のダウンストリームチャンネル)
+graph TD
+    U(ユーザ / クライアント\nOpenAI フォーマットのリクエスト) -->|標準 OpenAI API フォーマット\nAuthorization: Bearer &lt;One API トークン&gt;| OA
+
+    subgraph OA[One API]
+        direction TB
+        Auth[1. トークン認証 & クォータ確認]
+        Auth --> Route[2. チャンネル選択\n負荷分散 / チャンネル指定]
+        Route --> Conv[3. リクエスト形式変換\n非 OpenAI チャンネルのみ]
+        Conv --> Resp[4. レスポンス形式変換\n& クォータ控除]
+    end
+
+    OA -->|直接転送| C(OpenAI)
+    OA -->|直接転送| D(Azure OpenAI)
+    OA -->|直接転送| E(その他の OpenAI 互換チャンネル)
+    OA -->|自動フォーマット変換| F(Anthropic Claude)
+    OA -->|自動フォーマット変換| G(Google Gemini)
+    OA -->|自動フォーマット変換| H(百度 / 阿里云 / iFlytek\n智谱 / 腾讯 など)
 ```
 
 現在のリクエストにどのチャネルを使うかを指定するには、トークンの後に チャネル ID を追加します： 例えば、`Authorization: Bearer ONE_API_KEY-CHANNEL_ID` のようにします。

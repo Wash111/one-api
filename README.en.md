@@ -220,13 +220,30 @@ In places where the OpenAI API is used, remember to set the API Base to your One
 
 Note that the specific API Base format depends on the client you are using.
 
+### How It Works
+
+> **In a nutshell: OpenAI format in, any supported AI provider out.**
+>
+> Clients always send requests using the standard OpenAI API format. One API handles authentication, quota deduction, and channel selection internally, then forwards the request to the actual model provider — which can be OpenAI, but also Claude, Baidu, Alibaba, and any other supported provider. For channels that natively use the OpenAI API format (e.g. OpenAI, Azure), requests are passed through directly. For channels that use a different API format, One API transparently converts the request and response bodies, so clients never need to know the difference.
+
 ```mermaid
-graph LR
-    A(User)
-    A --->|Request| B(One API)
-    B -->|Relay Request| C(OpenAI)
-    B -->|Relay Request| D(Azure)
-    B -->|Relay Request| E(Other downstream channels)
+graph TD
+    U(User / Client\nOpenAI-format request) -->|Standard OpenAI API format\nAuthorization: Bearer &lt;One API token&gt;| OA
+
+    subgraph OA[One API]
+        direction TB
+        Auth[1. Token auth & quota check]
+        Auth --> Route[2. Channel selection\nLoad balancing / explicit channel]
+        Route --> Conv[3. Request format conversion\nonly for non-OpenAI channels]
+        Conv --> Resp[4. Response format conversion\n& quota deduction]
+    end
+
+    OA -->|Direct relay| C(OpenAI)
+    OA -->|Direct relay| D(Azure OpenAI)
+    OA -->|Direct relay| E(Other OpenAI-compatible channels)
+    OA -->|Auto format conversion| F(Anthropic Claude)
+    OA -->|Auto format conversion| G(Google Gemini)
+    OA -->|Auto format conversion| H(Baidu / Alibaba / iFlytek\nZhipu / Tencent / etc.)
 ```
 
 To specify which channel to use for the current request, you can add the channel ID after the token, for example: `Authorization: Bearer ONE_API_KEY-CHANNEL_ID`.
